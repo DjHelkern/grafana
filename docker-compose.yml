@@ -1,0 +1,108 @@
+version: "3.9"
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - grafana-configs:/etc/grafana
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    hostname: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - prom-data:/prometheus
+      - prom-configs:/etc/prometheus
+    restart: always
+    depends_on:
+           - alertmanager
+           - cadvisor
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    hostname: cadvisor
+    ports:
+    - 8080:8080
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    depends_on:
+    - redis
+  redis:
+    image: redis:latest
+    container_name: redis
+    hostname: redis
+    ports:
+    - 6379:6379
+  alertmanager-bot:
+    command:
+      - --alertmanager.url=http://alertmanager:9093
+      - --log.level=info
+      - --store=bolt
+      - --bolt.path=/data/bot.db
+    environment:
+     TELEGRAM_ADMIN: "telegtam"
+     TELEGRAM_TOKEN: telegtambotid
+    image: metalmatze/alertmanager-bot:latest
+    container_name: alertmanager-bot
+    hostname: alertmanager-bot
+    ports:
+      - "8081:8080"
+    restart: always
+    volumes:
+      - alert-data:/data
+
+  alertmanager:
+   image: prom/alertmanager:latest
+   container_name: alertmanager
+   hostname: alertmanager
+   ports:
+     - "9093:9093"
+   volumes:
+     - alertmanager:/etc/alertmanager/
+   restart: always
+   command:
+     - '--config.file=/etc/alertmanager/config.yml'
+     - '--storage.path=/etc/alertmanager/data'
+  blackbox:
+    image: prom/blackbox-exporter
+    container_name: blackbox
+    hostname: blackbox
+    ports:
+      - 9115:9115
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+    volumes:
+      - blackbox:/etc/blackbox
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    hostname: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude'
+      - '^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+volumes:
+  grafana-data:
+  grafana-configs:
+  prom-data:
+  prom-configs:
+  alert-data:
+  alertmanager:
+  blackbox:
